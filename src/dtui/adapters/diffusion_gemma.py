@@ -123,6 +123,10 @@ class DiffusionGemmaProvider:
         self._model = None
         self._processor = None
 
+    def warmup(self) -> None:
+        """Eagerly load the model so the first prompt streams without a stall."""
+        self._ensure_loaded()
+
     def _ensure_loaded(self) -> None:
         if self._model is not None:
             return
@@ -152,7 +156,11 @@ class DiffusionGemmaProvider:
 
         messages = [{"role": "user", "content": prompt}]
         inputs = self._processor.apply_chat_template(
-            messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_tensors="pt",
+            return_dict=True,
         ).to(self._model.device)
 
         def _run() -> None:

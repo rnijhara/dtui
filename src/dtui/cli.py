@@ -79,6 +79,10 @@ def live(model: str | None, mock: bool, max_new_tokens: int) -> None:
         from dtui.adapters.diffusion_gemma import MODEL_ID, DiffusionGemmaProvider
 
         provider = DiffusionGemmaProvider(model or MODEL_ID, max_new_tokens=max_new_tokens)
+        # Load before the TUI so the first prompt denoises immediately (no
+        # mid-recording stall while ~50GB of weights load).
+        click.echo(f"Loading {provider.model_id} ...")
+        provider.warmup()
 
     DtuiApp(trajectory_provider=provider, start_mode="viz").run()
 

@@ -137,6 +137,8 @@ class CanvasView(Widget):
             return Text(self.error, style="red")
         rec = self.current_record()
         if rec is None:
+            if self.live:
+                return Text("diffusing...", style="grey50")
             return Text(self.hint or "No trajectory loaded.", style="grey37")
         prev = self.trajectory.steps[self.index - 1] if self.index > 0 else None
 
