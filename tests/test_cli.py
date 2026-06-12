@@ -9,6 +9,13 @@ def test_help_lists_modes():
     assert result.exit_code == 0
     assert "chat" in result.output
     assert "viz" in result.output
+    assert "live" in result.output
+
+
+def test_live_help():
+    result = CliRunner().invoke(main, ["live", "--help"])
+    assert result.exit_code == 0
+    assert "--mock" in result.output
 
 
 def test_version():

@@ -49,6 +49,9 @@ class CanvasView(Widget):
         super().__init__(**kwargs)
         self.trajectory = Trajectory()
         self.index = 0
+        self.live = False
+        self.error: str | None = None
+        self.hint = ""
 
     # -- data / navigation -------------------------------------------------
 
@@ -82,6 +85,33 @@ class CanvasView(Widget):
         self.index = 0
         self.refresh()
 
+    # -- live feed ---------------------------------------------------------
+    #
+    # A TrajectoryProvider streams steps as the model denoises. Instead of
+    # pre-loading a finished trajectory and advancing on a timer, we start empty
+    # and append each StepRecord as it arrives, always showing the latest.
+
+    def begin_live(self, prompt: str = "") -> None:
+        self.trajectory = Trajectory(prompt=prompt)
+        self.index = 0
+        self.error = None
+        self.live = True
+        self.refresh()
+
+    def push_step(self, record: StepRecord) -> None:
+        self.trajectory.steps.append(record)
+        self.index = len(self.trajectory.steps) - 1
+        self.refresh()
+
+    def finish_live(self) -> None:
+        self.live = False
+        self.refresh()
+
+    def show_error(self, message: str) -> None:
+        self.error = message
+        self.live = False
+        self.refresh()
+
     # -- rendering ---------------------------------------------------------
 
     def _cell_style(self, rec: StepRecord, prev: StepRecord | None, i: int) -> Style:
@@ -103,14 +133,19 @@ class CanvasView(Widget):
         return _CONFIRMED_STYLE
 
     def render(self) -> Text:
+        if self.error:
+            return Text(self.error, style="red")
         rec = self.current_record()
         if rec is None:
-            return Text("No trajectory loaded.", style="grey37")
+            return Text(self.hint or "No trajectory loaded.", style="grey37")
         prev = self.trajectory.steps[self.index - 1] if self.index > 0 else None
 
-        header = Text(
-            f"denoising step {self.index + 1}/{self.total}\n\n", style="grey50"
-        )
+        if self.live:
+            header = Text(f"diffusing  .  step {self.index + 1}\n\n", style="grey50")
+        else:
+            header = Text(
+                f"denoising step {self.index + 1}/{self.total}\n\n", style="grey50"
+            )
         body = Text()
         for i, piece in enumerate(rec.canvas):
             shown = piece if piece.strip() != "" else piece

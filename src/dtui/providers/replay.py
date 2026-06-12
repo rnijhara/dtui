@@ -8,6 +8,7 @@ capture-then-replay path for producing a clean recording.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Iterator
 
@@ -27,6 +28,11 @@ class ReplayProvider:
     def from_file(cls, path: str | Path, name: str = "replay") -> "ReplayProvider":
         return cls(read_jsonl(path), name=name)
 
-    def stream_trajectory(self, prompt: str) -> Iterator[StepRecord]:
+    def stream_trajectory(
+        self, prompt: str, cancel: threading.Event | None = None
+    ) -> Iterator[StepRecord]:
         # The prompt is ignored: a replay is a fixed recording.
-        yield from self.trajectory.steps
+        for step in self.trajectory.steps:
+            if cancel is not None and cancel.is_set():
+                return
+            yield step

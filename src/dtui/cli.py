@@ -15,11 +15,13 @@ from dtui import __version__
 def main() -> None:
     """dtui - diffusion language models in your terminal.
 
-    Two modes in one full-screen app:
+    Three ways in:
+
+      live   type a prompt and watch a diffusion model denoise it, in process
+
+      viz    replay a recorded denoising trajectory (no model, no GPU)
 
       chat   a lightweight coding agent over any OpenAI-compatible endpoint
-
-      viz    watch a diffusion model denoise a token canvas, step by step
     """
 
 
@@ -55,6 +57,30 @@ def viz(trajectory: str | None, fps: float) -> None:
     path = Path(trajectory) if trajectory else _bundled_sample()
     traj = read_jsonl(path)
     DtuiApp(trajectory=traj, start_mode="viz", fps=fps).run()
+
+
+@main.command()
+@click.option("--model", default=None, help=f"Model id (default: {'google/diffusiongemma-26B-A4B-it'}).")
+@click.option("--mock", is_flag=True, default=False, help="Fake provider, no GPU. Previews the live UI offline.")
+@click.option("--max-new-tokens", default=256, show_default=True, help="Canvas length to denoise.")
+def live(model: str | None, mock: bool, max_new_tokens: int) -> None:
+    """Live viz: type a prompt and watch the in-process model denoise it.
+
+    Loads a diffusion model in-process (needs the [local] extra and a GPU), so
+    this is meant to run on the GPU box. Use --mock to preview the UI anywhere.
+    """
+    from dtui.tui.app import DtuiApp
+
+    if mock:
+        from dtui.providers.mock import MockDiffusionProvider
+
+        provider = MockDiffusionProvider()
+    else:
+        from dtui.adapters.diffusion_gemma import MODEL_ID, DiffusionGemmaProvider
+
+        provider = DiffusionGemmaProvider(model or MODEL_ID, max_new_tokens=max_new_tokens)
+
+    DtuiApp(trajectory_provider=provider, start_mode="viz").run()
 
 
 def _bundled_sample() -> Path:

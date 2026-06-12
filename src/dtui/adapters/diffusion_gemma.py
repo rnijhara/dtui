@@ -40,7 +40,14 @@ def to_id_list(value: Any) -> list[int]:
 
 
 def decode_canvas(token_ids: Any, tokenizer: Any) -> list[str]:
-    """Decode a token-id canvas into one string piece per position."""
+    """Decode a token-id canvas into one string piece per position.
+
+    Each position is decoded independently, which is what we want for a per-cell
+    canvas: one glyph per token. A Gemma/SentencePiece tokenizer decodes most
+    subword tokens cleanly this way; rare byte-fallback tokens may show a
+    replacement char. (If that turns out ugly on the real model, switch to a
+    growing-prefix decode so multi-byte glyphs reassemble. Verify on the GPU.)
+    """
     ids = to_id_list(token_ids)
     pieces: list[str] = []
     for tid in ids:
@@ -77,10 +84,12 @@ def make_capturing_streamer_class() -> type:
             self._sink.put(StepRecord(step=self._step, canvas=canvas))
             self._step += 1
 
-        def put(self, value: Any) -> None:  # confirmed tokens (final / committed)
-            canvas = decode_canvas(value, self._tok)
-            self._sink.put(StepRecord(step=self._step, canvas=canvas))
-            self._step += 1
+        def put(self, value: Any) -> None:
+            # ``put`` receives the committed-token *delta*, not a full canvas, so
+            # decoding it as one would push a truncated/garbled frame. put_draft
+            # already carries every per-step canvas, so ignore put here. (We also
+            # avoid super().put(), which would print to stdout and corrupt the TUI.)
+            return
 
         def end(self) -> None:
             self._sink.put(None)  # sentinel: trajectory complete
@@ -132,7 +141,9 @@ class DiffusionGemmaProvider:
             self.model_id, dtype="auto", device_map=self.device_map
         )
 
-    def stream_trajectory(self, prompt: str) -> Iterator[StepRecord]:
+    def stream_trajectory(
+        self, prompt: str, cancel: "threading.Event | None" = None
+    ) -> Iterator[StepRecord]:
         self._ensure_loaded()
         assert self._model is not None and self._processor is not None
         streamer_cls = make_capturing_streamer_class()
@@ -152,11 +163,19 @@ class DiffusionGemmaProvider:
             finally:
                 sink.put(None)
 
+        # The generate thread is a daemon so it can never block process exit. We
+        # drain with a timeout (rather than a blocking get) and bail on cancel,
+        # so a superseded or quit run unwinds promptly instead of pinning the
+        # caller's worker thread until generation finishes.
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         while True:
-            record = sink.get()
+            if cancel is not None and cancel.is_set():
+                return
+            try:
+                record = sink.get(timeout=0.1)
+            except queue.Empty:
+                continue
             if record is None:
-                break
+                return
             yield record
-        thread.join()

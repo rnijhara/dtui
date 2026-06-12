@@ -17,6 +17,7 @@ backend can only stream final text.
 
 from __future__ import annotations
 
+import threading
 from typing import Iterator, Protocol, Sequence, runtime_checkable
 
 from dtui.trajectory import StepRecord
@@ -42,6 +43,13 @@ class TrajectoryProvider(Protocol):
     name: str
     supports_trajectory: bool
 
-    def stream_trajectory(self, prompt: str) -> Iterator[StepRecord]:
-        """Yield one :class:`StepRecord` per denoising step."""
+    def stream_trajectory(
+        self, prompt: str, cancel: threading.Event | None = None
+    ) -> Iterator[StepRecord]:
+        """Yield one :class:`StepRecord` per denoising step.
+
+        ``cancel`` is an optional stop signal. A long-running backend should
+        check it and stop promptly so the caller's worker thread can unwind
+        (e.g. when the user submits a new prompt or quits mid-stream).
+        """
         ...

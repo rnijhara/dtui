@@ -59,10 +59,13 @@ def test_capturing_streamer_records_each_step(monkeypatch):
     sink: "queue.Queue" = queue.Queue()
     streamer = cls(_Tok(), sink)
 
-    # Two intermediate draft canvases, then a confirmed final, then end().
-    streamer.put_draft([[99, 99, 12]])
-    streamer.put_draft([[10, 99, 12]])
-    streamer.put([[10, 11, 12]])
+    # Draft canvases drive every per-step frame; the final draft is fully
+    # resolved. put() receives a committed delta and must emit NO frame. end()
+    # sends the sentinel.
+    streamer.put_draft([[99, 99, 12]])   # step 0
+    streamer.put_draft([[10, 99, 12]])   # step 1
+    streamer.put_draft([[10, 11, 12]])   # step 2 (fully denoised)
+    streamer.put([[10, 11, 12]])         # committed delta -> no frame
     streamer.end()
 
     records = []

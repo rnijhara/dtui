@@ -2,16 +2,18 @@
 
 A full-screen terminal app for diffusion language models.
 
-Two modes in one app:
+Three ways in:
 
+- **live** - type a prompt and watch a diffusion model denoise it in real time, in-process
+- **viz** - replay a recorded denoising trajectory (no model, no GPU)
 - **chat** - a lightweight coding agent over any OpenAI-compatible endpoint
-- **viz** - watch a diffusion model denoise a token canvas, step by step, as words resolve out of noise instead of streaming left to right
 
 Most LLMs write one token at a time, left to right. Diffusion models start from a
 canvas of noise and denoise the whole thing in parallel, locking in the most
-confident tokens each step. `viz` mode shows that process in the terminal. `chat`
-mode is a normal, lightweight coding agent you can point at any endpoint,
-including a diffusion model served over an OpenAI-compatible API.
+confident tokens each step. `live` runs the model in-process and streams every
+denoising step to the canvas as it happens. `viz` replays a recording of that
+same process anywhere, no GPU needed. `chat` is a normal lightweight coding
+agent you can point at any endpoint.
 
 ## Install
 
@@ -34,6 +36,33 @@ uv tool install "dtui[local]"   # pulls torch + transformers
 dtui --help
 ```
 
+### Modes
+
+The app is modal, like a terminal editor. It opens in **command** mode, where
+single keys run commands. Press `i` to enter **insert** mode (focuses the chat
+input so you can type); `esc` returns to command mode. The footer always shows
+the keys live in the current mode.
+
+```
+command mode   i insert · v chat/viz · space play/pause · r restart · q quit
+insert  mode   esc commands
+```
+
+### live mode
+
+Type a prompt and watch the model denoise it in real time. The model runs
+in-process, so this needs the `[local]` extra and a GPU (run it on the GPU box
+and SSH in):
+
+```bash
+dtui live                      # loads google/diffusiongemma-26B-A4B-it
+dtui live --model <id>         # a different diffusion model
+dtui live --mock               # fake provider, no GPU: preview the UI anywhere
+```
+
+Press `i`, type your prompt, watch it diffuse. `esc` back to command mode, `q`
+to quit. No replay file, no timer: the model's own cadence drives the animation.
+
 ### viz mode
 
 Replay a recorded denoising trajectory (the bundled sample, or your own JSONL):
@@ -44,7 +73,7 @@ dtui viz path/to/run.jsonl     # plays your recording
 dtui viz --fps 10              # faster playback
 ```
 
-Keys: `space` play/pause, `r` restart, `v` switch to chat, `q` quit.
+In command mode: `space` play/pause, `r` restart, `v` switch to chat, `q` quit.
 
 ### chat mode
 
