@@ -42,15 +42,23 @@ def to_id_list(value: Any) -> list[int]:
 def decode_canvas(token_ids: Any, tokenizer: Any) -> list[str]:
     """Decode a token-id canvas into one string piece per position.
 
-    Each position is decoded independently, which is what we want for a per-cell
-    canvas: one glyph per token. A Gemma/SentencePiece tokenizer decodes most
-    subword tokens cleanly this way; rare byte-fallback tokens may show a
-    replacement char. (If that turns out ugly on the real model, switch to a
-    growing-prefix decode so multi-byte glyphs reassemble. Verify on the GPU.)
+    Each position is decoded independently: one glyph per token, which is what a
+    per-cell canvas wants. Special tokens are blanked, because the model pads the
+    fixed-length canvas with ``<eos>`` after the answer and caps it with a turn
+    marker; we do not want a wall of ``<eos>`` or stray ``<turn|>`` in the viz.
+    (The mask token never appears in the streamed canvas, so blanking it is safe.)
     """
     ids = to_id_list(token_ids)
+    hidden = set(getattr(tokenizer, "all_special_ids", None) or [])
+    for attr in ("eos_token_id", "pad_token_id", "bos_token_id"):
+        tid = getattr(tokenizer, attr, None)
+        if isinstance(tid, int):
+            hidden.add(tid)
     pieces: list[str] = []
     for tid in ids:
+        if tid in hidden:
+            pieces.append("")
+            continue
         try:
             piece = tokenizer.decode([tid])
         except Exception:
