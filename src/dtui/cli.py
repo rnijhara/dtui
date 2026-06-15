@@ -28,7 +28,7 @@ def main() -> None:
 @main.command()
 @click.option("--base-url", default=None, help="OpenAI-compatible base URL, e.g. http://localhost:8000/v1")
 @click.option("--model", default=None, help="Model id to request.")
-@click.option("--api-key", default=None, help="API key (or set DTUI_API_KEY).")
+@click.option("--api-key", default=None, help="API key (or set DTUI_API_KEY / OPENROUTER_KEY).")
 @click.option("--agent/--no-agent", default=False, help="Enable the tool-using coding agent.")
 def chat(base_url: str | None, model: str | None, api_key: str | None, agent: bool) -> None:
     """Start simple mode: stream chat against a diffusion (or any) endpoint."""
@@ -63,7 +63,8 @@ def viz(trajectory: str | None, fps: float) -> None:
 @click.option("--model", default=None, help=f"Model id (default: {'google/diffusiongemma-26B-A4B-it'}).")
 @click.option("--mock", is_flag=True, default=False, help="Fake provider, no GPU. Previews the live UI offline.")
 @click.option("--max-new-tokens", default=256, show_default=True, help="Canvas length to denoise.")
-def live(model: str | None, mock: bool, max_new_tokens: int) -> None:
+@click.option("--frame-delay", default=0.08, show_default=True, help="Seconds to hold each live denoising frame.")
+def live(model: str | None, mock: bool, max_new_tokens: int, frame_delay: float) -> None:
     """Live viz: type a prompt and watch the in-process model denoise it.
 
     Loads a diffusion model in-process (needs the [local] extra and a GPU), so
@@ -84,7 +85,11 @@ def live(model: str | None, mock: bool, max_new_tokens: int) -> None:
         click.echo(f"Loading {provider.model_id} ...")
         provider.warmup()
 
-    DtuiApp(trajectory_provider=provider, start_mode="viz").run()
+    DtuiApp(
+        trajectory_provider=provider,
+        start_mode="viz",
+        live_frame_delay=frame_delay,
+    ).run()
 
 
 def _bundled_sample() -> Path:

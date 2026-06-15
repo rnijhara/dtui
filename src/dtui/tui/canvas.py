@@ -45,8 +45,9 @@ class CanvasView(Widget):
     }
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, *, preview_only: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
+        self.preview_only = preview_only
         self.trajectory = Trajectory()
         self.index = 0
         self.live = False
@@ -96,21 +97,21 @@ class CanvasView(Widget):
         self.index = 0
         self.error = None
         self.live = True
-        self.refresh()
+        self.refresh(layout=self.preview_only)
 
     def push_step(self, record: StepRecord) -> None:
         self.trajectory.steps.append(record)
         self.index = len(self.trajectory.steps) - 1
-        self.refresh()
+        self.refresh(layout=self.preview_only)
 
     def finish_live(self) -> None:
         self.live = False
-        self.refresh()
+        self.refresh(layout=self.preview_only)
 
     def show_error(self, message: str) -> None:
         self.error = message
         self.live = False
-        self.refresh()
+        self.refresh(layout=self.preview_only)
 
     # -- rendering ---------------------------------------------------------
 
@@ -138,9 +139,12 @@ class CanvasView(Widget):
         rec = self.current_record()
         if rec is None:
             if self.live:
-                return Text("diffusing...", style="grey50")
+                return Text("..." if self.preview_only else "diffusing...", style="grey50")
             return Text(self.hint or "No trajectory loaded.", style="grey37")
         prev = self.trajectory.steps[self.index - 1] if self.index > 0 else None
+
+        if self.preview_only:
+            return self._render_preview(rec, prev)
 
         if self.live:
             header = Text(f"diffusing  .  step {self.index + 1}\n\n", style="grey50")
@@ -153,3 +157,11 @@ class CanvasView(Widget):
             shown = piece if piece.strip() != "" else piece
             body.append(shown, style=self._cell_style(rec, prev, i))
         return header + body
+
+    def _render_preview(self, rec: StepRecord, prev: StepRecord | None) -> Text:
+        """Render the current draft canvas without a step counter."""
+        text = Text()
+        for i, piece in enumerate(rec.canvas):
+            shown = piece if piece.strip() != "" else piece
+            text.append(shown, style=self._cell_style(rec, prev, i))
+        return text

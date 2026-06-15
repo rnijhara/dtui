@@ -29,8 +29,10 @@ dependencies = [
 # Only needed for local viz mode. Simple mode and remote (e.g. Mercury) viz work without these.
 local = [
     "torch>=2.4",
+    "torchvision>=0.19",
     "transformers>=4.57",
     "accelerate>=0.34",
+    "pillow>=10",
 ]
 dev = [
     "pytest>=8.0",

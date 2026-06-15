@@ -18,7 +18,7 @@ import queue
 import threading
 from typing import Any, Iterator
 
-from dtui.trajectory import StepRecord
+from dtui.trajectory import CONFIRMED, StepRecord
 
 MODEL_ID = "google/diffusiongemma-26B-A4B-it"
 
@@ -67,6 +67,30 @@ def decode_canvas(token_ids: Any, tokenizer: Any) -> list[str]:
     return pieces
 
 
+def assistant_text_from_committed(text: str) -> str:
+    """Strip Gemma chat-template scaffolding from committed-token text.
+
+    DiffusionGemma's committed stream may include the serialized prompt and
+    structural markers such as ``user``, ``model``, and ``thought``. The live
+    transcript already renders the user prompt, so the fallback frame should
+    contain only the assistant-visible answer.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    marker_indexes = [
+        i
+        for i, line in enumerate(lines)
+        if line.strip().lower() in {"thought", "model", "assistant"}
+    ]
+    if marker_indexes:
+        return "\n".join(lines[marker_indexes[-1] + 1 :]).lstrip()
+    return "\n".join(
+        line
+        for line in lines
+        if line.strip().lower() not in {"user", "model", "assistant", "thought"}
+    ).lstrip()
+
+
 # --- the capturing streamer (subclasses transformers' base lazily) ----------
 
 def make_capturing_streamer_class() -> type:
@@ -86,18 +110,29 @@ def make_capturing_streamer_class() -> type:
             self._sink = sink
             self._step = 0
             self._tok = tokenizer
+            self._committed: list[str] = []
 
         def put_draft(self, value: Any) -> None:  # intermediate canvas, per step
             canvas = decode_canvas(value, self._tok)
+            if not any(piece.strip() for piece in canvas):
+                return
             self._sink.put(StepRecord(step=self._step, canvas=canvas))
             self._step += 1
 
         def put(self, value: Any) -> None:
-            # ``put`` receives the committed-token *delta*, not a full canvas, so
-            # decoding it as one would push a truncated/garbled frame. put_draft
-            # already carries every per-step canvas, so ignore put here. (We also
-            # avoid super().put(), which would print to stdout and corrupt the TUI.)
-            return
+            # ``put`` receives committed-token deltas. They are not denoising
+            # canvases, so do not call super().put() (it prints to stdout), but
+            # do accumulate them as a visible text fallback. Some prompts produce
+            # blank/special-token draft canvases while the usable answer arrives
+            # through this committed path.
+            pieces = decode_canvas(value, self._tok)
+            self._committed.extend(pieces)
+            text = assistant_text_from_committed("".join(self._committed))
+            if text.strip():
+                self._sink.put(
+                    StepRecord(step=self._step, canvas=[text], status=[CONFIRMED])
+                )
+                self._step += 1
 
         def end(self) -> None:
             self._sink.put(None)  # sentinel: trajectory complete

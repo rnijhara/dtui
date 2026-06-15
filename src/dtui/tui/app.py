@@ -59,6 +59,7 @@ class DtuiApp(App):
         agent: AgentLoop | None = None,
         start_mode: str = "chat",
         fps: float = 6.0,
+        live_frame_delay: float = 0.08,
     ) -> None:
         super().__init__()
         self._trajectory = trajectory or Trajectory()
@@ -68,13 +69,18 @@ class DtuiApp(App):
         self._live = trajectory_provider is not None
         self._start_mode = start_mode if start_mode in ("chat", "viz") else "chat"
         self._interval = 1.0 / fps if fps > 0 else 0.16
+        self._live_frame_delay = live_frame_delay
         self._play_timer = None
 
     def compose(self) -> ComposeResult:
         yield Header()
         with ContentSwitcher(initial=self._start_mode, id="body"):
             yield ChatView(self._chat_provider, self._agent, id="chat")
-            yield VizView(self._trajectory_provider, id="viz")
+            yield VizView(
+                self._trajectory_provider,
+                frame_delay=self._live_frame_delay,
+                id="viz",
+            )
         yield Footer()
 
     def on_mount(self) -> None:

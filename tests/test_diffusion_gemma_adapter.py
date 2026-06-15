@@ -9,13 +9,20 @@ import queue
 import sys
 import types
 
-from dtui.adapters.diffusion_gemma import decode_canvas, to_id_list
+from dtui.adapters.diffusion_gemma import (
+    assistant_text_from_committed,
+    decode_canvas,
+    to_id_list,
+)
 
 
 class _Tok:
     table = {10: "Diff", 11: "usion", 12: " models", 99: "<noise>"}
+    all_special_ids = [0]
 
     def decode(self, ids):
+        if ids[0] == 0:
+            return "<eos>"
         return self.table.get(ids[0], "?")
 
 
@@ -34,6 +41,11 @@ def test_to_id_list_handles_tensor_like():
 
 def test_decode_canvas():
     assert decode_canvas([10, 11, 12], _Tok()) == ["Diff", "usion", " models"]
+
+
+def test_assistant_text_from_committed_strips_chat_template_scaffolding():
+    text = "user\nwhich model are you?\nmodel\nthought\nI am Gemma 4."
+    assert assistant_text_from_committed(text) == "I am Gemma 4."
 
 
 def test_capturing_streamer_records_each_step(monkeypatch):
@@ -59,13 +71,15 @@ def test_capturing_streamer_records_each_step(monkeypatch):
     sink: "queue.Queue" = queue.Queue()
     streamer = cls(_Tok(), sink)
 
-    # Draft canvases drive every per-step frame; the final draft is fully
-    # resolved. put() receives a committed delta and must emit NO frame. end()
-    # sends the sentinel.
+    # Draft canvases drive every per-step frame; put() receives committed-token
+    # deltas and emits an accumulated text fallback without calling the base
+    # streamer (which would print to stdout). end() sends the sentinel.
     streamer.put_draft([[99, 99, 12]])   # step 0
     streamer.put_draft([[10, 99, 12]])   # step 1
     streamer.put_draft([[10, 11, 12]])   # step 2 (fully denoised)
-    streamer.put([[10, 11, 12]])         # committed delta -> no frame
+    streamer.put([[10, 11]])             # committed delta -> text fallback
+    streamer.put([[12]])                 # accumulated committed text
+    streamer.put_draft([[0, 0, 0]])       # blank draft -> ignored
     streamer.end()
 
     records = []
@@ -75,6 +89,8 @@ def test_capturing_streamer_records_each_step(monkeypatch):
             break
         records.append(r)
 
-    assert [r.step for r in records] == [0, 1, 2]
+    assert [r.step for r in records] == [0, 1, 2, 3, 4]
     assert records[0].canvas == ["<noise>", "<noise>", " models"]
+    assert records[3].text() == "Diffusion"
     assert records[-1].text() == "Diffusion models"
+    assert records[-1].status == ["confirmed"]

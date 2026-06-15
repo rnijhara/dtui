@@ -63,6 +63,9 @@ dtui live --mock               # fake provider, no GPU: preview the UI anywhere
 Press `i`, type your prompt, watch it diffuse. `esc` back to command mode, `q`
 to quit. No replay file, no timer: the model's own cadence drives the animation.
 
+For GPU setup, RunPod notes, and repeatable launch scripts, see
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+
 ### viz mode
 
 Replay a recorded denoising trajectory (the bundled sample, or your own JSONL):
@@ -85,7 +88,8 @@ dtui chat --agent              # enable the read/write/edit/bash tool loop
 ```
 
 Config resolves from flags, then env (`DTUI_BASE_URL`, `DTUI_MODEL`,
-`DTUI_API_KEY`), then `~/.config/dtui/config.toml`:
+`DTUI_API_KEY` / `OPENROUTER_KEY`), then local `.env`, then
+`~/.config/dtui/config.toml`:
 
 ```toml
 [chat]
