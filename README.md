@@ -30,6 +30,9 @@ The default install is light (no torch). To run an open diffusion model
 uv tool install "dtui[local]"   # pulls torch + transformers
 ```
 
+Running on a GPU machine? Use the [GPU runbook](docs/RUNBOOK.md) for setup,
+RunPod notes, and repeatable launch scripts.
+
 ## Usage
 
 ```bash
